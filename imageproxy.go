@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -124,6 +125,8 @@ func storeAndSetServingUrl(c appengine.Context, i *Image, img []byte) error {
 	return nil
 }
 
+var urlFix = regexp.MustCompile("^(https?:/)([^/])")
+
 func NewImage(r *http.Request) (*Image, error) {
 	parts := strings.SplitN(r.URL.Path, "/", 3)
 	if len(parts) != 3 {
@@ -145,6 +148,9 @@ func NewImage(r *http.Request) (*Image, error) {
 	if err != nil {
 		urlRaw = parts[2]
 	}
+
+	// GAE messes the url and transforms http:// into http:/ :
+	urlRaw = urlFix.ReplaceAllString(urlRaw, "$1/$2")
 
 	url, err := url.Parse(urlRaw)
 	if err != nil {
