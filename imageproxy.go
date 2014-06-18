@@ -50,6 +50,7 @@ func HandleImageRequest(w http.ResponseWriter, r *http.Request) {
 	err = g.Get(i)
 	if err != nil {
 		c.Warningf("Loading from source (%s, %d, %d): %s", i.Url, i.Width, i.Height, err)
+		// maybe to do this in a channel/worker, so the number of concurrent requests for same image will be = # of instances?
 		err = loadImage(c, i)
 		// TODO:
 		// 1. in case image loaded, but saving failed, serve image itself
@@ -140,7 +141,12 @@ func NewImage(r *http.Request) (*Image, error) {
 		return nil, fmt.Errorf("Failed parsing size (%s)", size)
 	}
 
-	url, err := url.Parse(parts[2])
+	urlRaw, err := url.QueryUnescape(parts[2])
+	if err != nil {
+		urlRaw = parts[2]
+	}
+
+	url, err := url.Parse(urlRaw)
 	if err != nil {
 		return nil, fmt.Errorf("Failed parsing url (%s): %s", parts[2], err)
 	}
