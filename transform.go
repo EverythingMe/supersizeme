@@ -15,6 +15,7 @@ func CenterCrop(img *io.Reader, width, height int) ([]byte, error) {
 		return nil, err
 	}
 
+	// TODO: I probably can switch to using imaging.Thumbnail here.
 	imgW := float64(m.Bounds().Max.X - m.Bounds().Min.X)
 	imgH := float64(m.Bounds().Max.Y - m.Bounds().Min.Y)
 	targetW := float64(width)
