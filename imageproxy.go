@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	// "time"
 
 	"appengine"
 	"appengine/blobstore"
@@ -63,7 +64,12 @@ func HandleImageRequest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	http.Redirect(w, r, i.ServingUrl, 301)
+	reader := blobstore.NewReader(c, i.BlobKey)
+	w.Header().Add("Content-Type", "image/jpeg")
+	// time should come from i
+	// http.ServeContent(w, r, "", time.Now(), reader)
+	// http.Redirect(w, r, i.ServingUrl, 301)
+	io.Copy(w, reader)
 }
 
 func loadImage(c appengine.Context, i *Image) error {
