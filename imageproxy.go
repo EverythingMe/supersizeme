@@ -8,11 +8,9 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	// "time"
+	"time"
 
 	"appengine"
-	"appengine/blobstore"
-	"appengine/image"
 	"appengine/urlfetch"
 
 	"github.com/mjibson/goon"
@@ -29,13 +27,12 @@ type optionsT struct {
 }
 
 type Image struct {
-	Id     string `datastore:"-" goon:"id"`
-	Url    string
-	Width  int64
-	Height int64
-
-	BlobKey    appengine.BlobKey
-	ServingUrl string
+	Id        string `datastore:"-" goon:"id"`
+	Url       string
+	Width     int64
+	Height    int64
+	Image     []byte
+	FetchTime time.Time
 }
 
 func HandleImageRequest(w http.ResponseWriter, r *http.Request) {
@@ -64,71 +61,9 @@ func HandleImageRequest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	reader := blobstore.NewReader(c, i.BlobKey)
+	// TODO: cache headers
 	w.Header().Add("Content-Type", "image/jpeg")
-	// time should come from i
-	// http.ServeContent(w, r, "", time.Now(), reader)
-	// http.Redirect(w, r, i.ServingUrl, 301)
-	io.Copy(w, reader)
-}
-
-func loadImage(c appengine.Context, i *Image) error {
-	client := urlfetch.Client(c)
-	resp, err := client.Get(i.Url)
-	if err != nil {
-		return err
-	}
-
-	defer resp.Body.Close()
-
-	reader, _ := resp.Body.(io.Reader)
-
-	img, err := CenterCrop(&reader, int(i.Width), int(i.Height))
-	if err != nil {
-		return err
-	}
-
-	err = storeAndSetServingUrl(c, i, img)
-
-	return err
-}
-
-func storeAndSetServingUrl(c appengine.Context, i *Image, img []byte) error {
-	w, err := blobstore.Create(c, "image/jpeg")
-	if err != nil {
-		return err
-	}
-
-	_, err = w.Write(img)
-	if err != nil {
-		return err
-	}
-
-	err = w.Close()
-	if err != nil {
-		return err
-	}
-
-	k, err := w.Key()
-	if err != nil {
-		return err
-	}
-
-	servingUrl, err := image.ServingURL(c, k, nil)
-	if err != nil {
-		return err
-	}
-
-	i.ServingUrl = servingUrl.String()
-	i.BlobKey = k
-
-	g := goon.FromContext(c)
-	_, err = g.Put(i)
-	if err != nil {
-		c.Errorf("Failed storing goon: %s", err)
-	}
-
-	return nil
+	w.Write(i.Image)
 }
 
 var urlFix = regexp.MustCompile("^(https?:/)([^/])")
@@ -175,4 +110,32 @@ func NewImage(r *http.Request) (*Image, error) {
 	}
 
 	return &i, nil
+}
+
+func loadImage(c appengine.Context, i *Image) error {
+	i.FetchTime = time.Now()
+	client := urlfetch.Client(c)
+	resp, err := client.Get(i.Url)
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	reader, _ := resp.Body.(io.Reader)
+
+	img, err := CenterCrop(&reader, int(i.Width), int(i.Height))
+	if err != nil {
+		return err
+	}
+
+	i.Image = img
+
+	g := goon.FromContext(c)
+	_, err = g.Put(i)
+	if err != nil {
+		c.Errorf("Failed storing goon: %s", err)
+	}
+
+	return nil
 }
